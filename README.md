@@ -14,7 +14,7 @@ javascript:
 
 ```javascript
 var up = $.xupload({
-    el: '#file' || $('#file'),
+    el: '#file', // || $('#file')
     uploadUrl: '/test',
     uploadParams: {
         fileRequestName: 'uploadfile', // || undefined
