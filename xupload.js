@@ -48,7 +48,6 @@
             maxSize: null, // 上传的最大尺寸，选填
             autoUpload: false, // 是否自动上传，默认否
             noGif: false, // 是否支持gif上传，默认支持
-            previewWrap: '',
             start: function () {}, // 开始上传回调
             done: function () {}, // 上传完成回调
             fail: function () {}, // 上传失败回调
