@@ -6,12 +6,13 @@
 
 html: 
 
-```
+```html
 <input type="file" accept="image/*" id="file" multiple="multiple">
 ```
+
 javascript: 
 
-```
+```javascript
 var up = $.xupload({
     el: '#file' || $('#file'),
     uploadUrl: '/test',
