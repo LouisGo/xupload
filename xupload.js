@@ -46,6 +46,7 @@
             uploadUrl: '', // 上传路径，必填
             uploadParams: {}, // 上传携带参数对象，选填
             maxSize: null, // 上传的最大尺寸，选填
+            previewImgClass: 'x-preview-img',
             autoUpload: false, // 是否自动上传，默认否
             noGif: false, // 是否支持gif上传，默认支持
             start: function () {}, // 开始上传回调
@@ -53,7 +54,6 @@
             fail: function () {}, // 上传失败回调
             progress: function () {}, // 上传进度回调
             checkError: function () {}, // 检测失败回调
-            previewBefore: function () {}, // 上传前预览方法，目前需要自定义，建议采用FileReader base64展现
         };
 
         _this.fileCached = [];
@@ -71,19 +71,24 @@
     Upload.prototype = {
         init: function () {
             var _this = this,
-                config = this.config;
-            var el = config.el;
-            if (el && el instanceof jQuery) {
-                el = el.selector;
-            }
+                config = this.config,
+                el = config.el;
+
             _this.$root = $(el);
-            $(el).each(function () {
-                $('body').on('change', el, function (e) {
-                    var files = e.target.files;
-                    _this.fileCached = $.extend({}, files);
-                    _this.handler(e, files);
+
+            var isEl = _this._isSelector('el');
+            
+            if (isEl) {
+                $(el).each(function () {
+                    $('body').on('change', el, function (e) {
+                        var files = e.target.files;
+                        _this.fileCached = $.extend({}, files);
+                        _this.handler(e, files);
+                    })
                 })
-            })
+            } else {
+                throw '请输入正确格式的el值'
+            }
         },
         handler: function (e, files) {
             var _this = this,
@@ -91,24 +96,68 @@
                 fileCached = this.fileCached,
                 rules = this.validate(files);
 
+            var isPreviewWrap = _this._isSelector('previewWrap');
+
             if (rules.result) {
-                if (config.autoUpload) {
-                    // custom temporary: 暂时先服务于业务定制
-                    _this.triggerUpload();
+                config.autoUpload && _this.triggerUpload();
+                if (isPreviewWrap) {
+                    _this.previewBefore();
+                } else {
+                    throw '请输入正确格式的previewWrap值'
                 }
-                _this._previewBefore(files);
             } else {
                 _this._checkError(rules.msgQuene);
             }
         },
-        triggerUpload: function name() {
+        delBefore: function (index) {
+            var _this = this,
+                files = this.fileCached,
+                len = files.length,
+                previewWrap = _this.config.previewWrap;
+            
+            var isPreviewWrap = _this._isSelector('previewWrap');
+
+            if (!isPreviewWrap) {
+                throw '要想进行删除操作，请先输入正确格式的previewWrap值';
+                return;
+            }
+            console.log(files);
+            var isIndex = (index >= 0); // 判断是否传入参数（排除index为0时的特殊情况）
+            var isValid = /^\d+$/.test(index) && index < len; // 判断传入的index是否为整数，切数目不能大于文件个数
+
+            if (isIndex && isValid) {
+                delete files[index];
+                console.log(files);
+            } else if (isIndex && !isValid) {
+                throw 'delBefore方法传入的索引值为从0开始的整数且不得大于您上传的文件数'
+            }
+        },
+        _isSelector: function (el) {
+            var which = this.config[el];
+            return Object.prototype.toString.call(which) === '[object String]' && which !== '' && !/^[0-9]+.?[0-9]*$/.test(which);
+        },
+        triggerUpload: function (index) {
             var _this = this,
                 files = this.fileCached,
                 len = files.length;
-            if (len > 1) {
-                _this.upload(files);
-            } else {
-                _this.upload(files[0]);
+
+            var isIndex = (index >= 0); // 判断是否传入参数（排除index为0时的特殊情况）
+            var isValid = /^\d+$/.test(index) && index < len; // 判断传入的index是否为整数，切数目不能大于文件个数
+
+            if (isIndex && isValid) {
+                if (len > 1) {
+                    _this.upload(files[index]);
+                } else if (len === 1) {
+                    _this.upload(files[0]);
+                }
+            } else if (!isIndex && !isValid) {
+                if (len > 1) {
+                    _this.upload(files);
+                } else if (len === 1) {
+                    _this.upload(files[0]);
+                }
+            } else if (isIndex && !isValid) {
+                throw 'triggerUpload方法传入的索引值为从0开始的整数且不得大于您上传的文件数'
             }
         },
         upload: function (files) {
@@ -116,15 +165,21 @@
                 uploadParams = this.config.uploadParams,
                 xhr = new XMLHttpRequest(),
                 data = new FormData(),
-                fileRequestName = '';
+                fileRequestName = '',
+                len = files.length;
+            
+            if (len === undefined) {
+                len = 1;
+            }
 
             uploadParams.fileRequestName ? 
             fileRequestName = uploadParams.fileRequestName : 
             fileRequestName = 'file[]';
 
-            for (var i = 0, len = files.length; i < len; i++) {
-                var file = files[i];
-                data.append(fileRequestName, file);
+            for (var i = 0; i < len; i++) {
+                var file;
+                len === 1 ? file = files : file = files[i];
+                data.append(fileRequestName, file, file.name);
             }
 
             if (uploadParams) {
@@ -210,6 +265,30 @@
                 msg: msg
             }
         },
+        previewBefore: function (params) {
+            var _this = this,
+                files = _this.fileCached,
+                previewWrap = _this.config.previewWrap,
+                previewImgClass = _this.config.previewImgClass;
+
+            if (previewWrap && previewWrap instanceof jQuery) {
+                previewWrap = previewWrap.selector;
+            }
+
+            var	$previewWrap = $(previewWrap);
+
+            for (var i = 0; i < files.length; i++) {
+                (function (i) {
+                    var	reader = new FileReader();
+                    reader.readAsDataURL(files[i]);
+                    reader.onload = function () {
+                        var dataUrl = reader.result;
+                        var img = $('<img src="' + dataUrl + '" class="' + previewImgClass + '"/>');
+                        img.appendTo($previewWrap);
+                    };
+                })(i);
+            }  
+        },
         get: function () {
             return this.fileCached;
         },
@@ -240,10 +319,7 @@
         },
         _checkError: function (msgQuene) {
             this.config.checkError.call(this, msgQuene);
-        },
-        _previewBefore: function (files) {
-            this.config.previewBefore.call(this, files);
-        },
+        }
     }
     $.xupload = function (config) {
         return new Upload(config);
