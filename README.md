@@ -76,7 +76,7 @@ $('#someSubmitBtn').click(function () {
 ## 方法Methods
 
 | Name | Param Type | Description
-| :--  | :-- | :--  | :-- |
+| :--  | :-- | :--  |
 | triggerUpload | Number | 手动触发文件上传方法，当不传参数时则全部默认全部上传，参数为文件index时则单独上传该文件 | 
 | delBefore | Number | 当设置了previewWrap时（即开启了预览模式）有效，参数设置同triggerUpload，预览时删除指定index的图片
 | get |  | 获得当前的files数组
