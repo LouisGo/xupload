@@ -43,9 +43,10 @@
 
         _this.defaultConfig = {
             el: null, // 绑定的元素，必填
-            uploadUrl: '', // 上传路径，必填
+            uploadUrl: null, // 上传路径，必填
             uploadParams: {}, // 上传携带参数对象，选填
             maxSize: null, // 上传的最大尺寸，选填
+            previewWrap: null,
             previewImgClass: 'x-preview-img',
             autoUpload: false, // 是否自动上传，默认否
             noGif: false, // 是否支持gif上传，默认支持
@@ -58,6 +59,11 @@
 
         _this.fileCached = [];
         _this.$root = null;
+
+        // 防止previewImgClass为null或undefine
+        if (config.previewImgClass === null || config.previewImgClass === '') {
+            config.previewImgClass = _this.defaultConfig.previewImgClass;
+        }
         
         if (config && $.isPlainObject(config)) {
             _this.config = $.extend({}, _this.defaultConfig, config);
@@ -72,69 +78,43 @@
         init: function () {
             var _this = this,
                 config = this.config,
-                el = config.el;
-
-            _this.$root = $(el);
-
-            var isEl = _this._isSelector('el');
-            
-            if (isEl) {
-                $(el).each(function () {
-                    $('body').on('change', el, function (e) {
-                        var files = e.target.files;
-                        _this.fileCached = $.extend({}, files);
-                        _this.handler(e, files);
-                    })
-                })
-            } else {
+                el = config.el,
+                isEl = _this._isSelector('el'),
+                isPreviewWrap = _this._isSelector('previewWrap');
+                
+            if (!isEl) {
                 throw '请输入正确格式的el值'
             }
+            
+            if (!isPreviewWrap) {
+                throw '请输入正确格式的previewWrap值'
+            }
+            
+            _this.$root = $(el);
+            
+            _this.$root.each(function () {
+                $('body').on('change', el, function (e) {
+                    var files = e.target.files;
+                    Array.prototype.push.apply(_this.fileCached, files);
+                    _this.handler(e, files);
+                });
+            });
         },
         handler: function (e, files) {
             var _this = this,
                 config = this.config,
                 fileCached = this.fileCached,
                 rules = this.validate(files);
-
-            var isPreviewWrap = _this._isSelector('previewWrap');
-
+                
             if (rules.result) {
                 config.autoUpload && _this.triggerUpload();
-                if (isPreviewWrap) {
+                // 暂时只支持图片预览
+                if (_this.$root.attr('accept').substr(0, 5) === 'image') {
                     _this.previewBefore();
-                } else {
-                    throw '请输入正确格式的previewWrap值'
                 }
             } else {
                 _this._checkError(rules.msgQuene);
             }
-        },
-        delBefore: function (index) {
-            var _this = this,
-                files = this.fileCached,
-                len = files.length,
-                previewWrap = _this.config.previewWrap;
-            
-            var isPreviewWrap = _this._isSelector('previewWrap');
-
-            if (!isPreviewWrap) {
-                throw '要想进行删除操作，请先输入正确格式的previewWrap值';
-                return;
-            }
-            console.log(files);
-            var isIndex = (index >= 0); // 判断是否传入参数（排除index为0时的特殊情况）
-            var isValid = /^\d+$/.test(index) && index < len; // 判断传入的index是否为整数，切数目不能大于文件个数
-
-            if (isIndex && isValid) {
-                delete files[index];
-                console.log(files);
-            } else if (isIndex && !isValid) {
-                throw 'delBefore方法传入的索引值为从0开始的整数且不得大于您上传的文件数'
-            }
-        },
-        _isSelector: function (el) {
-            var which = this.config[el];
-            return Object.prototype.toString.call(which) === '[object String]' && which !== '' && !/^[0-9]+.?[0-9]*$/.test(which);
         },
         triggerUpload: function (index) {
             var _this = this,
@@ -265,29 +245,63 @@
                 msg: msg
             }
         },
-        previewBefore: function (params) {
+        previewBefore: function () {
             var _this = this,
                 files = _this.fileCached,
+                filesNeed = [],
+                filesHad = [],
                 previewWrap = _this.config.previewWrap,
                 previewImgClass = _this.config.previewImgClass;
 
-            if (previewWrap && previewWrap instanceof jQuery) {
-                previewWrap = previewWrap.selector;
+            var $previewWrap = $(previewWrap);
+
+            // 如果已经存在预览位置
+            if ($previewWrap.find('.' + previewImgClass).length > 0) {
+                $previewWrap.find('.' + previewImgClass).each(function (index, value) {
+                    var $this = $(this);
+                    filesHad.push($this.data('name'));
+                });
+                for (var i = 0; i < files.length; i++) {
+                    if (filesHad.indexOf(files[i].name) < 0) {
+                        filesNeed.push(files[i]);
+                    }
+                }
+            } else {
+                filesNeed = files;
             }
 
-            var	$previewWrap = $(previewWrap);
-
-            for (var i = 0; i < files.length; i++) {
+            for (var i = 0; i < filesNeed.length; i++) {
                 (function (i) {
                     var	reader = new FileReader();
-                    reader.readAsDataURL(files[i]);
+                    reader.readAsDataURL(filesNeed[i]);
                     reader.onload = function () {
                         var dataUrl = reader.result;
-                        var img = $('<img src="' + dataUrl + '" class="' + previewImgClass + '"/>');
+                        var img = $('<img src="' + dataUrl + '" class="' + previewImgClass + '" data-name="' + filesNeed[i].name + '"/>');
                         img.appendTo($previewWrap);
                     };
                 })(i);
             }  
+        },
+        delBefore: function (index) {
+            var _this = this,
+                files = this.fileCached,
+                len = files.length,
+                previewWrap = _this.config.previewWrap;
+                previewImgClass = _this.config.previewImgClass;
+            
+            var isIndex = (index >= 0); // 判断是否传入参数（排除index为0时的特殊情况）
+            var isValid = /^\d+$/.test(index) && index < len; // 判断传入的index是否为整数，切数目不能大于文件个数
+
+            if (isIndex && isValid) {
+                files.splice(index, 1);
+                $(previewWrap).find('.' + previewImgClass).eq(index).remove();
+            } else if (!isIndex && !isValid) {
+                $(previewWrap).find('.' + previewImgClass).each(function () {
+                    $(this).remove();
+                })
+            } else if (isIndex && !isValid) {
+                throw 'delBefore方法传入的索引值为从0开始的整数且不得大于您上传的文件数'
+            }
         },
         get: function () {
             return this.fileCached;
@@ -319,6 +333,10 @@
         },
         _checkError: function (msgQuene) {
             this.config.checkError.call(this, msgQuene);
+        },
+        _isSelector: function (el) {
+            var which = this.config[el];
+            return Object.prototype.toString.call(which) === '[object String]' && which !== '' && !/^[0-9]+.?[0-9]*$/.test(which);
         }
     }
     $.xupload = function (config) {
